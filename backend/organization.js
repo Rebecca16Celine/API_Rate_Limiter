@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+
 const BloomFilter = require("./bloomFilter");
 const HyperLogLog = require("./hyperLogLog");
 
@@ -13,8 +15,8 @@ class Organization {
         this.bloomFilter = new BloomFilter();
         this.hll = new HyperLogLog();
 
-        // Number of requests that the
-        // organization reports
+        // Number of requests reported
+        // by the organization
         this.reportedRequests = 0;
     }
 
@@ -38,25 +40,15 @@ class Organization {
         }
 
 
-        /*
-         * Add request to Bloom Filter.
-         */
-
+        // Add request to Bloom Filter
         this.bloomFilter.add(requestId);
 
 
-        /*
-         * Add request to HyperLogLog.
-         */
-
+        // Add request to HyperLogLog
         this.hll.add(requestId);
 
 
-        /*
-         * Increase organization's reported
-         * request count.
-         */
-
+        // Increase reported request count
         this.reportedRequests++;
 
 
@@ -64,6 +56,23 @@ class Organization {
             reported: true,
             requestId: requestId
         };
+    }
+
+
+    /*
+     * Generate a 32-byte SHA-256 hash of the
+     * current Bloom Filter state.
+     *
+     * This is what will be submitted to the
+     * blockchain as bloomHash.
+     */
+
+    getBloomHash() {
+
+        return crypto
+            .createHash("sha256")
+            .update(Buffer.from(this.bloomFilter.bits))
+            .digest("hex");
     }
 
 
@@ -78,7 +87,10 @@ class Organization {
                 this.reportedRequests,
 
             hllEstimate:
-                this.hll.estimate()
+                this.hll.estimate(),
+
+            bloomHash:
+                "0x" + this.getBloomHash()
         };
     }
 
@@ -89,6 +101,7 @@ class Organization {
             this.reportedRequests >=
             this.quota
         ) {
+
             return "QUOTA_BREACH";
         }
 

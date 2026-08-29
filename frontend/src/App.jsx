@@ -1,238 +1,239 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 
+const API_URL = "";
+
 function App() {
     const [dashboard, setDashboard] = useState({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
-    // Fetch dashboard data
     const fetchDashboard = async () => {
         try {
-            const response = await fetch("/api/dashboard");
+            setError("");
+
+            const response = await fetch(
+                `${API_URL}/api/dashboard`
+            );
 
             if (!response.ok) {
-                throw new Error("Failed to fetch dashboard");
+                throw new Error(
+                    "Failed to fetch dashboard data"
+                );
             }
 
             const data = await response.json();
 
             setDashboard(data);
-            setError("");
         } catch (err) {
-            console.error(err);
-            setError("Unable to connect to API Gateway");
+            setError(err.message);
         } finally {
             setLoading(false);
         }
     };
 
-
-    // Send request through API Gateway
-    const sendRequest = async (
-        organization,
-        shouldReport
-    ) => {
-        try {
-            setError("");
-
-            const response = await fetch(
-                `/api/request/${encodeURIComponent(organization)}`,
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        requestId:
-                            `request-${Date.now()}-${Math.random()}`,
-                        shouldReport
-                    })
-                }
-            );
-
-            if (!response.ok) {
-                throw new Error("Failed to send request");
-            }
-
-            await fetchDashboard();
-
-        } catch (err) {
-            console.error(err);
-            setError("Unable to send request");
-        }
-    };
-
-
-    // Load dashboard and refresh every 2 seconds
     useEffect(() => {
         fetchDashboard();
 
         const interval = setInterval(
             fetchDashboard,
-            2000
+            5000
         );
 
         return () => clearInterval(interval);
     }, []);
 
-
-    if (loading) {
-        return (
-            <div className="app">
-                <h1>Loading dashboard...</h1>
-            </div>
-        );
-    }
-
+    const organizations =
+        Object.entries(dashboard);
 
     return (
         <div className="app">
 
-            {/* Header */}
-
             <header className="header">
 
-                <h1>
-                    Decentralized API Quota Dashboard
-                </h1>
+                <div>
+                    <h1>
+                        API Usage Monitoring
+                    </h1>
 
-                <p>
-                    Independent Gateway Usage Verification
-                </p>
+                    <p>
+                        Independent gateway
+                        metering & blockchain
+                        verification
+                    </p>
+                </div>
+
+                <button
+                    className="refresh-button"
+                    onClick={fetchDashboard}
+                >
+                    Refresh
+                </button>
 
             </header>
 
 
-            {/* Error */}
-
-            {error && (
-                <div className="error">
-                    ⚠ {error}
+            {loading && (
+                <div className="message">
+                    Loading dashboard...
                 </div>
             )}
 
 
-            {/* Organization cards */}
+            {error && (
+                <div className="error-box">
+                    ⚠ {error}
+                    <br />
+                    Make sure the Node.js
+                    backend is running on
+                    port 5000.
+                </div>
+            )}
+
+
+            {!loading &&
+                !error &&
+                organizations.length === 0 && (
+                    <div className="message">
+                        No organizations found.
+                    </div>
+                )}
+
 
             <main className="dashboard">
 
-                {Object.entries(dashboard).map(
-                    ([name, org]) => {
+                {organizations.map(
+                    ([name, data]) => {
 
-                        const isDiscrepancy =
-                            org.status === "DISCREPANCY";
-
-                        const isBreach =
-                            org.status === "QUOTA_BREACH";
-
-
-                        // Calculate quota percentage
-                        const usagePercentage =
-                            org.quota > 0
+                        const usagePercent =
+                            data.quota > 0
                                 ? Math.min(
-                                    (org.organizationReported /
-                                        org.quota) * 100,
+                                    (
+                                        data.gatewayObserved /
+                                        data.quota
+                                    ) * 100,
                                     100
                                 )
                                 : 0;
 
+                        const isDiscrepancy =
+                            data.status ===
+                            "DISCREPANCY";
+
+                        const isQuotaBreach =
+                            data.status ===
+                            "QUOTA_BREACH";
+
 
                         return (
-                            <div
-                                className="org-card"
+                            <section
+                                className="organization-card"
                                 key={name}
                             >
 
-                                {/* Organization */}
+                                <div className="card-header">
 
-                                <h2>{name}</h2>
+                                    <div>
+                                        <h2>{name}</h2>
+
+                                        <span className="subtitle">
+                                            Usage Overview
+                                        </span>
+                                    </div>
 
 
-                                {/* Quota */}
-
-                                <div className="metric">
-
-                                    <span>
-                                        Quota
+                                    <span
+                                        className={
+                                            `status ${
+                                                isQuotaBreach
+                                                    ? "breach"
+                                                    : isDiscrepancy
+                                                        ? "discrepancy"
+                                                        : "normal"
+                                            }`
+                                        }
+                                    >
+                                        {isQuotaBreach
+                                            ? "⚠ QUOTA BREACH"
+                                            : isDiscrepancy
+                                                ? "⚠ DISCREPANCY"
+                                                : "✓ NORMAL"}
                                     </span>
-
-                                    <strong>
-                                        {org.quota.toLocaleString()}
-                                    </strong>
 
                                 </div>
 
 
-                                {/* Gateway */}
+                                <div className="stats-grid">
 
-                                <div className="metric">
-
-                                    <span>
-                                        Gateway observed
-                                    </span>
-
-                                    <strong>
-                                        {org.gatewayObserved.toLocaleString()}
-                                    </strong>
-
-                                </div>
-
-
-                                {/* Organization reported */}
-
-                                <div className="metric">
-
-                                    <span>
-                                        Organization reported
-                                    </span>
-
-                                    <strong>
-                                        {org.organizationReported.toLocaleString()}
-                                    </strong>
-
-                                </div>
-
-
-                                {/* HLL */}
-
-                                <div className="metric">
-
-                                    <span>
-                                        HLL unique estimate
-                                    </span>
-
-                                    <strong>
-                                        ~
-                                        {Number(
-                                            org.hllEstimate
-                                        ).toFixed(2)}
-                                    </strong>
-
-                                </div>
-
-
-                                {/* Quota usage */}
-
-                                <div className="quota-section">
-
-                                    <div className="quota-header">
-
+                                    <div className="stat">
                                         <span>
-                                            Quota usage
+                                            Gateway Observed
                                         </span>
 
                                         <strong>
-                                            {
-                                                org.organizationReported.toLocaleString()
-                                            }
-                                            {" / "}
-                                            {
-                                                org.quota.toLocaleString()
-                                            }
+                                            {data.gatewayObserved}
                                         </strong>
+                                    </div>
+
+
+                                    <div className="stat">
+                                        <span>
+                                            Organization Reported
+                                        </span>
+
+                                        <strong>
+                                            {data.organizationReported}
+                                        </strong>
+                                    </div>
+
+
+                                    <div className="stat">
+                                        <span>
+                                            HLL Estimate
+                                        </span>
+
+                                        <strong>
+                                            {Number(
+                                                data.hllEstimate
+                                            ).toFixed(2)}
+                                        </strong>
+                                    </div>
+
+
+                                    <div className="stat">
+                                        <span>
+                                            Difference
+                                        </span>
+
+                                        <strong
+                                            className={
+                                                data.difference > 0
+                                                    ? "difference"
+                                                    : ""
+                                            }
+                                        >
+                                            {data.difference}
+                                        </strong>
+                                    </div>
+
+                                </div>
+
+
+                                <div className="quota-section">
+
+                                    <div className="quota-label">
+
+                                        <span>
+                                            Quota Usage
+                                        </span>
+
+                                        <span>
+                                            {
+                                                data.gatewayObserved
+                                            }{" "}
+                                            /{" "}
+                                            {data.quota}
+                                        </span>
 
                                     </div>
 
@@ -240,117 +241,123 @@ function App() {
                                     <div className="progress-bar">
 
                                         <div
-                                            className="progress-fill"
+                                            className={
+                                                `progress ${
+                                                    isQuotaBreach
+                                                        ? "progress-breach"
+                                                        : ""
+                                                }`
+                                            }
                                             style={{
                                                 width:
-                                                    `${usagePercentage}%`
+                                                    `${usagePercent}%`
                                             }}
                                         />
 
                                     </div>
 
+                                </div>
 
-                                    <div className="percentage">
 
-                                        {usagePercentage.toFixed(2)}%
+                                {isDiscrepancy && (
+                                    <div className="alert discrepancy-alert">
+
+                                        <strong>
+                                            ⚠ Discrepancy
+                                        </strong>
+
+                                        <p>
+                                            The gateway observed{" "}
+                                            {
+                                                data.gatewayObserved
+                                            }{" "}
+                                            requests, while the
+                                            organization reported{" "}
+                                            {
+                                                data.organizationReported
+                                            }.
+                                        </p>
+
+                                    </div>
+                                )}
+
+
+                                {isQuotaBreach && (
+                                    <div className="alert breach-alert">
+
+                                        <strong>
+                                            ⚠ Quota Breach
+                                        </strong>
+
+                                        <p>
+                                            Gateway-observed usage
+                                            has reached or exceeded
+                                            the organization's quota.
+                                        </p>
+
+                                    </div>
+                                )}
+
+
+                                <div className="blockchain-section">
+
+                                    <h3>
+                                        Blockchain Verification
+                                    </h3>
+
+
+                                    <div className="blockchain-grid">
+
+                                        <div>
+                                            <span>
+                                                Status
+                                            </span>
+
+                                            <strong>
+                                                ✓ Connected
+                                            </strong>
+                                        </div>
+
+
+                                        <div>
+                                            <span>
+                                                Difference
+                                            </span>
+
+                                            <strong>
+                                                {data.difference}
+                                            </strong>
+                                        </div>
+
+
+                                        <div className="hash">
+
+                                            <span>
+                                                Bloom Hash
+                                            </span>
+
+                                            <code>
+                                                {data.bloomHash}
+                                            </code>
+
+                                        </div>
 
                                     </div>
 
                                 </div>
 
-
-                                <hr />
-
-
-                                {/* Request buttons */}
-
-                                <div className="buttons">
-
-                                    <button
-                                        className="normal-button"
-                                        onClick={() =>
-                                            sendRequest(
-                                                name,
-                                                true
-                                            )
-                                        }
-                                    >
-                                        Send Normal Request
-                                    </button>
-
-
-                                    <button
-                                        className="unreported-button"
-                                        onClick={() =>
-                                            sendRequest(
-                                                name,
-                                                false
-                                            )
-                                        }
-                                    >
-                                        Send Unreported Request
-                                    </button>
-
-                                </div>
-
-
-                                {/* Difference */}
-
-                                <div className="difference">
-
-                                    <span>
-                                        Difference
-                                    </span>
-
-                                    <strong>
-                                        {org.difference.toLocaleString()}
-                                    </strong>
-
-                                </div>
-
-
-                                {/* Status */}
-
-                                <div
-                                    className={
-                                        "status " +
-                                        (
-                                            isDiscrepancy ||
-                                            isBreach
-                                                ? "alert"
-                                                : "normal"
-                                        )
-                                    }
-                                >
-
-                                    {isBreach && (
-                                        <>
-                                            🚨 QUOTA BREACH
-                                        </>
-                                    )}
-
-                                    {!isBreach &&
-                                        isDiscrepancy && (
-                                            <>
-                                                ⚠ DISCREPANCY
-                                            </>
-                                        )}
-
-                                    {!isDiscrepancy &&
-                                        !isBreach && (
-                                            <>
-                                                ✓ NORMAL
-                                            </>
-                                        )}
-
-                                </div>
-
-                            </div>
+                            </section>
                         );
                     }
                 )}
 
             </main>
+
+
+            <footer>
+                API Rate Limiter •
+                Independent Usage Verification
+            </footer>
 
         </div>
     );
