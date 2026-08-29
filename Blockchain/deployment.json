@@ -1,13 +1,82 @@
 {
   "contractName": "UsageCommitment",
   "address": "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-  "transactionHash": "b204bd760a462f4ed2b1ff2ffef9000a6eacdd6d1a06612cf9efbf052ef56f02",
+  "admin": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "gateway": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+  "transactionHash": "0bdd8038157cb6373d9c94a67391d62a93b4671e2c300da24aa8199dc55106c0",
   "abi": [
     {
-      "inputs": [],
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "gatewayAddress",
+          "type": "address"
+        }
+      ],
       "stateMutability": "nonpayable",
       "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "organizationId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "periodId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "gatewayObserved",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "hllEstimate",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bytes32",
+          "name": "bloomHash",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "GatewayObservationSubmitted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "oldGateway",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newGateway",
+          "type": "address"
+        }
+      ],
+      "name": "GatewayUpdated",
+      "type": "event"
     },
     {
       "anonymous": false,
@@ -69,6 +138,37 @@
           "type": "bytes32"
         },
         {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "periodId",
+          "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "organizationReported",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        }
+      ],
+      "name": "OrganizationReportSubmitted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "bytes32",
+          "name": "organizationId",
+          "type": "bytes32"
+        },
+        {
           "indexed": false,
           "internalType": "uint256",
           "name": "oldQuota",
@@ -95,41 +195,66 @@
         },
         {
           "indexed": true,
-          "internalType": "uint256",
-          "name": "period",
-          "type": "uint256"
-        },
-        {
-          "indexed": false,
           "internalType": "bytes32",
-          "name": "commitment",
+          "name": "periodId",
           "type": "bytes32"
         },
         {
           "indexed": false,
           "internalType": "uint256",
-          "name": "timestamp",
+          "name": "gatewayObserved",
           "type": "uint256"
         },
         {
           "indexed": false,
           "internalType": "uint256",
-          "name": "reportedUsage",
+          "name": "organizationReported",
           "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "difference",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "discrepancy",
+          "type": "bool"
         },
         {
           "indexed": false,
           "internalType": "uint256",
           "name": "cumulativeUsage",
           "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "bool",
+          "name": "overQuota",
+          "type": "bool"
         }
       ],
-      "name": "UsageCommitted",
+      "name": "UsageFinalized",
       "type": "event"
     },
     {
       "inputs": [],
       "name": "admin",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "gateway",
       "outputs": [
         {
           "internalType": "address",
@@ -156,6 +281,11 @@
           "type": "bool"
         },
         {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
           "internalType": "uint256",
           "name": "quota",
           "type": "uint256"
@@ -164,11 +294,6 @@
           "internalType": "uint256",
           "name": "usedQuota",
           "type": "uint256"
-        },
-        {
-          "internalType": "address",
-          "name": "owner",
-          "type": "address"
         }
       ],
       "stateMutability": "view",
@@ -182,27 +307,62 @@
           "type": "bytes32"
         },
         {
-          "internalType": "uint256",
-          "name": "period",
-          "type": "uint256"
+          "internalType": "bytes32",
+          "name": "periodId",
+          "type": "bytes32"
         }
       ],
       "name": "getUsageRecord",
       "outputs": [
         {
+          "internalType": "uint256",
+          "name": "gatewayObserved",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "organizationReported",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "hllEstimate",
+          "type": "uint256"
+        },
+        {
           "internalType": "bytes32",
-          "name": "commitment",
+          "name": "bloomHash",
           "type": "bytes32"
         },
         {
           "internalType": "uint256",
-          "name": "timestamp",
+          "name": "difference",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "discrepancy",
+          "type": "bool"
+        },
+        {
+          "internalType": "uint256",
+          "name": "orgTimestamp",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "reportedUsage",
+          "name": "gatewayTimestamp",
           "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "orgSubmitted",
+          "type": "bool"
+        },
+        {
+          "internalType": "bool",
+          "name": "gatewaySubmitted",
+          "type": "bool"
         }
       ],
       "stateMutability": "view",
@@ -216,27 +376,31 @@
           "type": "bytes32"
         }
       ],
-      "name": "organizations",
+      "name": "organizationOwners",
       "outputs": [
         {
-          "internalType": "bool",
-          "name": "registered",
-          "type": "bool"
-        },
-        {
-          "internalType": "uint256",
-          "name": "quota",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "usedQuota",
-          "type": "uint256"
-        },
-        {
           "internalType": "address",
-          "name": "owner",
+          "name": "",
           "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "name": "quotas",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
         }
       ],
       "stateMutability": "view",
@@ -269,26 +433,86 @@
       "inputs": [
         {
           "internalType": "bytes32",
+          "name": "",
+          "type": "bytes32"
+        }
+      ],
+      "name": "registeredOrganizations",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
           "name": "organizationId",
           "type": "bytes32"
         },
         {
-          "internalType": "uint256",
-          "name": "period",
-          "type": "uint256"
-        },
-        {
           "internalType": "bytes32",
-          "name": "commitment",
+          "name": "periodId",
           "type": "bytes32"
         },
         {
           "internalType": "uint256",
-          "name": "reportedUsage",
+          "name": "gatewayObserved",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "hllEstimate",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "bloomHash",
+          "type": "bytes32"
+        }
+      ],
+      "name": "submitGatewayObservation",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "bytes32",
+          "name": "organizationId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "periodId",
+          "type": "bytes32"
+        },
+        {
+          "internalType": "uint256",
+          "name": "organizationReported",
           "type": "uint256"
         }
       ],
-      "name": "submitUsageCommitment",
+      "name": "submitOrganizationReport",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newGateway",
+          "type": "address"
+        }
+      ],
+      "name": "updateGateway",
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
@@ -335,28 +559,13 @@
           "internalType": "bytes32",
           "name": "",
           "type": "bytes32"
-        },
+        }
+      ],
+      "name": "usedQuotas",
+      "outputs": [
         {
           "internalType": "uint256",
           "name": "",
-          "type": "uint256"
-        }
-      ],
-      "name": "usageRecords",
-      "outputs": [
-        {
-          "internalType": "bytes32",
-          "name": "commitment",
-          "type": "bytes32"
-        },
-        {
-          "internalType": "uint256",
-          "name": "timestamp",
-          "type": "uint256"
-        },
-        {
-          "internalType": "uint256",
-          "name": "reportedUsage",
           "type": "uint256"
         }
       ],
@@ -371,14 +580,29 @@
           "type": "bytes32"
         },
         {
+          "internalType": "bytes32",
+          "name": "periodId",
+          "type": "bytes32"
+        },
+        {
           "internalType": "uint256",
-          "name": "period",
+          "name": "gatewayObserved",
           "type": "uint256"
         },
         {
           "internalType": "uint256",
-          "name": "usage",
+          "name": "organizationReported",
           "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "hllEstimate",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bytes32",
+          "name": "bloomHash",
+          "type": "bytes32"
         }
       ],
       "name": "verifyUsage",

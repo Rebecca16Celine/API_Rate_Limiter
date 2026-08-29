@@ -10,9 +10,6 @@ CONTRACT_FILE = "UsageCommitment.sol"
 CONTRACT_NAME = "UsageCommitment"
 DEPLOYMENT_OUT = "deployment.json"
 
-# Make sure the required compiler version is actually installed before
-# trying to select it -- set_solc_version() alone assumes it's present
-# and fails with a confusing error otherwise.
 if SOLC_VERSION not in {str(v) for v in get_installed_solc_versions()}:
     print(f"solc {SOLC_VERSION} not found locally, installing...")
     install_solc(SOLC_VERSION)
@@ -33,18 +30,20 @@ w3 = Web3(Web3.HTTPProvider(RPC_URL))
 if not w3.is_connected():
     raise Exception(f"Could not connect to blockchain at {RPC_URL}")
 
-# NOTE: this relies on the node providing unlocked, pre-funded accounts
-# (e.g. Anvil/Hardhat/Ganache in dev mode). It will NOT work against a
-# real network (mainnet/testnet/most RPC providers), since those don't
-# expose accounts to sign with -- you'd need to load a private key and
-# sign the transaction locally instead (see note at bottom).
-account = w3.eth.accounts[0]
+# accounts[0] deploys (becomes admin). accounts[1] is designated as the
+# independent metering gateway -- the only address allowed to call
+# submitGatewayObservation(). On a local dev node (Anvil/Hardhat/Ganache)
+# both are pre-funded and unlocked by default.
+admin_account = w3.eth.accounts[0]
+gateway_account = w3.eth.accounts[1]
 
 contract = w3.eth.contract(abi=abi, bytecode=bytecode)
 
-print(f"Deploying {CONTRACT_NAME} from {account}...")
+print(f"Deploying {CONTRACT_NAME}...")
+print("Admin:", admin_account)
+print("Gateway:", gateway_account)
 
-tx_hash = contract.constructor().transact({"from": account})
+tx_hash = contract.constructor(gateway_account).transact({"from": admin_account})
 receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
 
 if receipt.status != 1:
@@ -52,16 +51,14 @@ if receipt.status != 1:
 
 print("Deployment successful!")
 print("Contract address:", receipt.contractAddress)
-print("Deployer:", account)
 print("Transaction hash:", receipt.transactionHash.hex())
 print("Gas used:", receipt.gasUsed)
 
-# Persist ABI + address so other scripts (interaction, tests, front-end)
-# don't need to recompile or hardcode the address.
 deployment_info = {
     "contractName": CONTRACT_NAME,
     "address": receipt.contractAddress,
-    "deployer": account,
+    "admin": admin_account,
+    "gateway": gateway_account,
     "transactionHash": receipt.transactionHash.hex(),
     "abi": abi,
 }
@@ -74,7 +71,7 @@ print(f"Deployment info written to {DEPLOYMENT_OUT}")
 #
 #   from eth_account import Account
 #   acct = Account.from_key(PRIVATE_KEY)          # never hardcode this; load from env
-#   tx = contract.constructor().build_transaction({
+#   tx = contract.constructor(gateway_account).build_transaction({
 #       "from": acct.address,
 #       "nonce": w3.eth.get_transaction_count(acct.address),
 #       "gas": 3_000_000,
