@@ -11,6 +11,14 @@ app.use(express.json());
 
 
 // ----------------------------------------
+// Blockchain Service
+// ----------------------------------------
+
+const BLOCKCHAIN_SERVICE =
+    "http://127.0.0.1:8000";
+
+
+// ----------------------------------------
 // Gateway Meter
 // ----------------------------------------
 
@@ -38,17 +46,78 @@ const organizations = {
 
 
 // ----------------------------------------
-// Health check
+// Helper: Blockchain Request
 // ----------------------------------------
 
-app.get("/api/health", (req, res) => {
+async function blockchainRequest(
+    endpoint,
+    data
+) {
 
-    res.json({
-        status: "OK",
-        message: "API Gateway is running"
-    });
+    try {
 
-});
+        const response = await fetch(
+            `${BLOCKCHAIN_SERVICE}${endpoint}`,
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify(data)
+            }
+        );
+
+
+        const result =
+            await response.json();
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                result.error ||
+                "Blockchain request failed"
+            );
+
+        }
+
+
+        return result;
+
+    } catch (error) {
+
+        console.error(
+            "Blockchain service error:",
+            error.message
+        );
+
+        return {
+            success: false,
+            error: error.message
+        };
+    }
+}
+
+
+// ----------------------------------------
+// Health Check
+// ----------------------------------------
+
+app.get(
+    "/api/health",
+    (req, res) => {
+
+        res.json({
+            status: "OK",
+            message:
+                "API Gateway is running"
+        });
+
+    }
+);
 
 
 // ----------------------------------------
@@ -57,10 +126,11 @@ app.get("/api/health", (req, res) => {
 
 app.post(
     "/api/request/:organization",
-    (req, res) => {
+    async (req, res) => {
 
         const organizationName =
             req.params.organization;
+
 
         const organization =
             organizations[
@@ -68,7 +138,10 @@ app.post(
             ];
 
 
+        // --------------------------------
         // Check organization
+        // --------------------------------
+
         if (!organization) {
 
             return res.status(404).json({
@@ -77,7 +150,9 @@ app.post(
                     "Organization not found",
 
                 availableOrganizations:
-                    Object.keys(organizations)
+                    Object.keys(
+                        organizations
+                    )
 
             });
 
@@ -97,24 +172,14 @@ app.post(
         // Independent Gateway Meter
         // --------------------------------
 
-        const gatewayResult =
-            gatewayMeter.recordRequest(
-                organizationName
-            );
+        gatewayMeter.recordRequest(
+            organizationName
+        );
 
 
         // --------------------------------
-        // Organization processing
+        // Organization Processing
         // --------------------------------
-
-        /*
-         * shouldReport is only being used
-         * for our demonstration scenario.
-         *
-         * In a real system, reporting would
-         * come from the organization's
-         * reporting process.
-         */
 
         const shouldReport =
             req.body.shouldReport !== false;
@@ -128,7 +193,7 @@ app.post(
 
 
         // --------------------------------
-        // Current usage
+        // Current Usage
         // --------------------------------
 
         const gatewayObserved =
@@ -146,7 +211,16 @@ app.post(
 
 
         // --------------------------------
-        // Compare usage
+        // Bloom Hash
+        // --------------------------------
+
+        const bloomHash =
+            "0x" +
+            organization.getBloomHash();
+
+
+        // --------------------------------
+        // Difference
         // --------------------------------
 
         const difference =
@@ -155,19 +229,8 @@ app.post(
 
 
         // --------------------------------
-        // Quota check
+        // Quota
         // --------------------------------
-
-        /*
-         * IMPORTANT:
-         *
-         * Quota is now checked against
-         * the INDEPENDENT GATEWAY METER.
-         *
-         * This prevents an organization from
-         * avoiding a quota breach simply by
-         * reporting a lower usage value.
-         */
 
         const quotaBreached =
             gatewayObserved >=
@@ -188,11 +251,6 @@ app.post(
         }
 
 
-        /*
-         * Gateway usage is authoritative
-         * for quota enforcement.
-         */
-
         if (quotaBreached) {
 
             status = "QUOTA_BREACH";
@@ -201,7 +259,102 @@ app.post(
 
 
         // --------------------------------
-        // Response
+        // Blockchain Period
+        // --------------------------------
+
+        /*
+         * For the demo, all requests made
+         * during the same minute belong to
+         * the same blockchain usage period.
+         */
+
+        const now = new Date();
+
+        const period =
+            now.toISOString()
+                .slice(0, 16);
+
+
+        // --------------------------------
+        // Submit Gateway Observation
+        // --------------------------------
+
+        const gatewayBlockchain =
+            await blockchainRequest(
+                "/gateway-observation",
+                {
+                    organization:
+                        organizationName,
+
+                    period,
+
+                    gatewayObserved,
+
+                    hllEstimate,
+
+                    bloomHash
+                }
+            );
+
+
+        // --------------------------------
+        // Submit Organization Report
+        // --------------------------------
+
+        const organizationBlockchain =
+            await blockchainRequest(
+                "/organization-report",
+                {
+                    organization:
+                        organizationName,
+
+                    period,
+
+                    organizationReported
+                }
+            );
+
+
+        // --------------------------------
+        // Read Blockchain Record
+        // --------------------------------
+
+        let blockchainRecord = null;
+
+
+        try {
+
+            const recordResponse =
+                await fetch(
+                    `${BLOCKCHAIN_SERVICE}/usage-record` +
+                    `?organization=${encodeURIComponent(
+                        organizationName
+                    )}` +
+                    `&period=${encodeURIComponent(
+                        period
+                    )}`
+                );
+
+
+            blockchainRecord =
+                await recordResponse.json();
+
+        } catch (error) {
+
+            blockchainRecord = {
+
+                success: false,
+
+                error:
+                    error.message
+
+            };
+
+        }
+
+
+        // --------------------------------
+        // Final Response
         // --------------------------------
 
         res.json({
@@ -219,6 +372,8 @@ app.post(
 
             hllEstimate,
 
+            bloomHash,
+
             difference,
 
             quota:
@@ -228,7 +383,22 @@ app.post(
 
             status,
 
-            organizationResult
+            organizationResult,
+
+            blockchain: {
+
+                period,
+
+                gatewayObservation:
+                    gatewayBlockchain,
+
+                organizationReport:
+                    organizationBlockchain,
+
+                usageRecord:
+                    blockchainRecord
+
+            }
 
         });
 
@@ -242,17 +412,21 @@ app.post(
 
 app.get(
     "/api/dashboard",
-    (req, res) => {
+    async (req, res) => {
 
         const dashboard = {};
 
 
         for (
             const [name, organization]
-            of Object.entries(organizations)
+            of Object.entries(
+                organizations
+            )
         ) {
 
-            // Independent gateway usage
+            // ----------------------------
+            // Gateway usage
+            // ----------------------------
 
             const gatewayObserved =
                 gatewayMeter.getOrganizationUsage(
@@ -260,61 +434,75 @@ app.get(
                 );
 
 
-            // Organization reported usage
+            // ----------------------------
+            // Organization usage
+            // ----------------------------
 
             const organizationReported =
                 organization.reportedRequests;
 
 
-            // HLL estimate
+            // ----------------------------
+            // HLL
+            // ----------------------------
 
             const hllEstimate =
                 organization.hll.estimate();
 
 
-            // Usage difference
+            // ----------------------------
+            // Bloom
+            // ----------------------------
+
+            const bloomHash =
+                "0x" +
+                organization.getBloomHash();
+
+
+            // ----------------------------
+            // Difference
+            // ----------------------------
 
             const difference =
                 gatewayObserved -
                 organizationReported;
 
 
-            // --------------------------------
-            // Quota check
-            // --------------------------------
+            // ----------------------------
+            // Quota
+            // ----------------------------
 
             const quotaBreached =
                 gatewayObserved >=
                 organization.quota;
 
 
-            // --------------------------------
+            // ----------------------------
             // Status
-            // --------------------------------
+            // ----------------------------
 
             let status = "NORMAL";
 
 
             if (difference > 0) {
 
-                status = "DISCREPANCY";
+                status =
+                    "DISCREPANCY";
 
             }
 
-
-            /*
-             * IMPORTANT:
-             *
-             * Quota breach is determined
-             * using gatewayObserved.
-             */
 
             if (quotaBreached) {
 
-                status = "QUOTA_BREACH";
+                status =
+                    "QUOTA_BREACH";
 
             }
 
+
+            // ----------------------------
+            // Dashboard data
+            // ----------------------------
 
             dashboard[name] = {
 
@@ -326,6 +514,8 @@ app.get(
                 organizationReported,
 
                 hllEstimate,
+
+                bloomHash,
 
                 difference,
 
@@ -345,15 +535,19 @@ app.get(
 
 
 // ----------------------------------------
-// Start server
+// Start Server
 // ----------------------------------------
 
 const PORT = 5000;
 
-app.listen(PORT, () => {
 
-    console.log(
-        `API Gateway running on port ${PORT}`
-    );
+app.listen(
+    PORT,
+    () => {
 
-});
+        console.log(
+            `API Gateway running on port ${PORT}`
+        );
+
+    }
+);
