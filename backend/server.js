@@ -78,31 +78,24 @@ app.post(
 
                 availableOrganizations:
                     Object.keys(organizations)
+
             });
 
         }
 
 
-        /*
-         * Generate a request ID.
-         *
-         * If the client provides one,
-         * use it.
-         *
-         * Otherwise generate one.
-         */
+        // --------------------------------
+        // Request ID
+        // --------------------------------
 
         const requestId =
             req.body.requestId ||
             `request-${Date.now()}-${Math.random()}`;
 
 
-        /*
-         * IMPORTANT:
-         *
-         * Gateway Meter counts the request
-         * independently.
-         */
+        // --------------------------------
+        // Independent Gateway Meter
+        // --------------------------------
 
         const gatewayResult =
             gatewayMeter.recordRequest(
@@ -110,15 +103,17 @@ app.post(
             );
 
 
+        // --------------------------------
+        // Organization processing
+        // --------------------------------
+
         /*
-         * Organization processes the request.
+         * shouldReport is only being used
+         * for our demonstration scenario.
          *
-         * shouldReport controls our demo
-         * discrepancy scenario.
-         *
-         * In a real system this would come
-         * from the organization's reporting
-         * behavior, not a client-controlled flag.
+         * In a real system, reporting would
+         * come from the organization's
+         * reporting process.
          */
 
         const shouldReport =
@@ -132,9 +127,9 @@ app.post(
             );
 
 
-        /*
-         * Current usage values
-         */
+        // --------------------------------
+        // Current usage
+        // --------------------------------
 
         const gatewayObserved =
             gatewayMeter.getOrganizationUsage(
@@ -150,15 +145,38 @@ app.post(
             organization.hll.estimate();
 
 
-        /*
-         * Compare independent gateway count
-         * with organization reported count.
-         */
+        // --------------------------------
+        // Compare usage
+        // --------------------------------
 
         const difference =
             gatewayObserved -
             organizationReported;
 
+
+        // --------------------------------
+        // Quota check
+        // --------------------------------
+
+        /*
+         * IMPORTANT:
+         *
+         * Quota is now checked against
+         * the INDEPENDENT GATEWAY METER.
+         *
+         * This prevents an organization from
+         * avoiding a quota breach simply by
+         * reporting a lower usage value.
+         */
+
+        const quotaBreached =
+            gatewayObserved >=
+            organization.quota;
+
+
+        // --------------------------------
+        // Status
+        // --------------------------------
 
         let status = "NORMAL";
 
@@ -170,10 +188,12 @@ app.post(
         }
 
 
-        if (
-            organizationReported >=
-            organization.quota
-        ) {
+        /*
+         * Gateway usage is authoritative
+         * for quota enforcement.
+         */
+
+        if (quotaBreached) {
 
             status = "QUOTA_BREACH";
 
@@ -201,6 +221,11 @@ app.post(
 
             difference,
 
+            quota:
+                organization.quota,
+
+            quotaBreached,
+
             status,
 
             organizationResult
@@ -215,78 +240,108 @@ app.post(
 // Dashboard API
 // ----------------------------------------
 
-app.get("/api/dashboard", (req, res) => {
+app.get(
+    "/api/dashboard",
+    (req, res) => {
 
-    const dashboard = {};
-
-
-    for (
-        const [name, organization]
-        of Object.entries(organizations)
-    ) {
-
-        const gatewayObserved =
-            gatewayMeter.getOrganizationUsage(
-                name
-            );
+        const dashboard = {};
 
 
-        const organizationReported =
-            organization.reportedRequests;
-
-
-        const hllEstimate =
-            organization.hll.estimate();
-
-
-        const difference =
-            gatewayObserved -
-            organizationReported;
-
-
-        let status = "NORMAL";
-
-
-        if (difference > 0) {
-
-            status = "DISCREPANCY";
-
-        }
-
-
-        if (
-            organizationReported >=
-            organization.quota
+        for (
+            const [name, organization]
+            of Object.entries(organizations)
         ) {
 
-            status = "QUOTA_BREACH";
+            // Independent gateway usage
+
+            const gatewayObserved =
+                gatewayMeter.getOrganizationUsage(
+                    name
+                );
+
+
+            // Organization reported usage
+
+            const organizationReported =
+                organization.reportedRequests;
+
+
+            // HLL estimate
+
+            const hllEstimate =
+                organization.hll.estimate();
+
+
+            // Usage difference
+
+            const difference =
+                gatewayObserved -
+                organizationReported;
+
+
+            // --------------------------------
+            // Quota check
+            // --------------------------------
+
+            const quotaBreached =
+                gatewayObserved >=
+                organization.quota;
+
+
+            // --------------------------------
+            // Status
+            // --------------------------------
+
+            let status = "NORMAL";
+
+
+            if (difference > 0) {
+
+                status = "DISCREPANCY";
+
+            }
+
+
+            /*
+             * IMPORTANT:
+             *
+             * Quota breach is determined
+             * using gatewayObserved.
+             */
+
+            if (quotaBreached) {
+
+                status = "QUOTA_BREACH";
+
+            }
+
+
+            dashboard[name] = {
+
+                quota:
+                    organization.quota,
+
+                gatewayObserved,
+
+                organizationReported,
+
+                hllEstimate,
+
+                difference,
+
+                quotaBreached,
+
+                status
+
+            };
 
         }
 
 
-        dashboard[name] = {
-
-            quota:
-                organization.quota,
-
-            gatewayObserved,
-
-            organizationReported,
-
-            hllEstimate,
-
-            difference,
-
-            status
-
-        };
+        res.json(dashboard);
 
     }
-
-
-    res.json(dashboard);
-
-});
+);
 
 
 // ----------------------------------------
